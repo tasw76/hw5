@@ -1,0 +1,355 @@
+---
+title: "hw5"
+format: html
+editor: visual
+---
+
+## Task 1: Read in the data and modify
+
+Reach in the data provided.
+```{r}
+d1 <- read.table("C:/Users/tangw1/Desktop/ST558_repo/hw5/student-mat.csv", sep=";", header=TRUE)
+d2 <- read.table("C:/Users/tangw1/Desktop/ST558_repo/hw5/student-por.csv", sep=";", header=TRUE)
+
+# Merge the two data frames using the example code
+d3 <- merge(d1, d2, by=c("school", "sex", "age", "address", "famsize", "Pstatus", "Medu", "Fedu", "Mjob", "Fjob", "reason", "nursery", "internet"))
+print(nrow(d3)) # Should output 382 students
+```
+
+Use tidyverse to repeat the step, and this approach returns an issue (see note).
+```{r}
+library(tidyverse)
+# Read in the data using read_csv from the readr package
+d4 <- read_delim("C:/Users/tangw1/Desktop/ST558_repo/hw5/student-mat.csv", col_names = TRUE, delim = ";")
+d5 <- read_delim("C:/Users/tangw1/Desktop/ST558_repo/hw5/student-por.csv", col_names = TRUE, delim = ";")
+# Combine the data frames using inner_join
+d6 <- inner_join(d1, d2, by = c("school", "sex", "age", "address", "famsize", "Pstatus", 
+                                "Medu", "Fedu", "Mjob", "Fjob", "reason", "nursery", "internet"))
+print(nrow(d3))
+# Note: Had issues when combining data: "Detected an unexpected many-to-many relationship between `x` and `y'"
+```
+
+Use a subset of all variables when combining the two data frames. No issues noted.
+```{r}
+# define the columns to join, excluding G1, ...
+join_columns <- setdiff(names(d1), c("G1", "G2", "G3", "paid", "absences"))
+
+# Combine the data frames using inner_join on the selected columns
+d7 <- inner_join(d4, d5, by = join_columns)
+print(nrow(d7)) # Should output the number of matching students
+```
+
+Choose four categorical variables and convert those into factor variables. 
+```{r}
+# I choose the following 4 categorical variables: school, Fjob, reason, and famsize.
+math_data <- d4 %>%
+  mutate(
+    school = as.factor(school),
+    Fjob = as.factor(Fjob),
+    reason = as.factor(reason),
+    famsize = as.factor(famsize)
+  )
+
+por_data <- d5 %>%
+  mutate(
+    school = as.factor(school),
+    Fjob = as.factor(Fjob),
+    reason = as.factor(reason),
+    famsize = as.factor(famsize)
+  )
+
+combined_data <- d7 %>%
+  mutate(
+    school = as.factor(school),
+    Fjob = as.factor(Fjob),
+    reason = as.factor(reason),
+    famsize = as.factor(famsize)
+  )
+```
+
+## Task 2: Summary the data (Very basic EDA)
+
+I use the following functions to look at how the data is stored and see if everything makes sense.
+```{r}
+head(combined_data)   # display first 10 rows
+str(combined_data)  # examine the structure of the data
+colSums(is.na(combined_data)) # check missing values
+# See below the result of examining the structure of the data. I did not find any missing values when running colsums() 
+```
+Create contingency tables
+```{r}
+# one-way contingency table
+one_way_school <- table(combined_data$school)
+one_way_school
+```
+The above output shows that 'GP' appears 287 times in the dataset and 'MS' appears 33 times.
+
+```{r}
+# Two-way contingency table
+two_way_table <- table(combined_data$school, combined_data$reason)
+two_way_table
+```
+
+The above output shows that the count of observations where the student is from 'GP' and the reason why they choose 'GP' being 'course' is 106, and so forth.
+
+```{r}
+three_way_table <- table(combined_data$school, combined_data$reason, combined_data$famsize)
+three_way_table
+```
+
+
+The above output shows that for family size of 'GT3', the count of observations where the stsudent is from 'GP' and the reason why they choose 'GP' being course is 79, and so forth. 
+
+Now, create a conditional 2-way table using table().
+```{r}
+# Do it by subsetting the data first.
+subset_data <- combined_data %>%
+  filter(school =="GP")
+
+cond_2way_table <- table(subset_data$reason, subset_data$famsize)
+cond_2way_table
+```
+
+```{r}
+# Do it by creating a three-way table first
+three_way <- table(combined_data$school, combined_data$reason, combined_data$famsize)
+conditional_2way_table <- three_way["GP", , ]
+conditional_2way_table
+```
+
+Create a 2-way contingency table using group_by() and summarize(), then format it.
+```{r}
+two_way <- combined_data %>% 
+  group_by(reason, famsize) %>% 
+  summarize(count=n(), .groups = 'drop')
+format_two_way <- two_way %>%
+  pivot_wider(names_from = famsize, values_from = count, values_fill = 0)
+format_two_way
+```
+
+Create a stacked bar graph and a side-by-side bar graph.
+```{r}
+library(ggplot2)
+
+# Stacked bar graph
+stacked_bar <- ggplot(combined_data, aes(x = famsize, fill = reason)) +
+  geom_bar(position = "stack") +
+  labs(title = "Stacked Bar Graph of Reasons by Family Size",
+       x = "Family Size",
+       y = "Count",
+       fill = "Reason") +
+  theme_minimal()
+
+stacked_bar
+```
+
+```{r}
+# Side-by-Side Bar Graph
+side_by_side_bar <- ggplot(combined_data, aes(x = famsize, fill = reason)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Side-by-Side Bar Graph of Reasons by Family Size",
+       x = "Family Size",
+       y = "Count",
+       fill = "Reason") +
+  theme_minimal()
+
+side_by_side_bar
+```
+
+For numerical variables, find measures of center and spread for three of them. 
+```{r}
+# To measure center, I use mean and median. To measure spread, I use standard deviation.
+combined_summary <- combined_data %>%
+  summarize(
+    age_mean = mean(age),
+    age_median = median(age),
+    age_sd = sd(age),
+    # 
+    absences_mean = mean(absences.x),
+    absences_median = median(absences.x),
+    absences_sd = sd(absences.x),
+    
+    G3_mean = mean(G3.x),
+    G3_median = median(G3.x),
+    G3_sd = sd(G3.x)
+  )
+
+# Print the summary
+combined_summary
+```
+Repeat the step while subsetting the data (I choose the school filter)
+```{r}
+gp_summary <- combined_data %>% 
+  filter(school=="GP") %>% 
+  summarize(
+    age_mean = mean(age),
+    age_median = median(age),
+    age_sd = sd(age),
+    # 
+    absences_mean = mean(absences.x),
+    absences_median = median(absences.x),
+    absences_sd = sd(absences.x),
+    
+    G3_mean = mean(G3.x),
+    G3_median = median(G3.x),
+    G3_sd = sd(G3.x)
+  )
+gp_summary
+```
+Find measure of center and spread across a single grouping variable for three variables.
+```{r}
+grouped_summary <- combined_data %>%
+  group_by(famsize) %>%
+  summarize(
+    age_mean = mean(age),
+    age_median = median(age),
+    age_sd = sd(age),
+    # 
+    absences_mean = mean(absences.x),
+    absences_median = median(absences.x),
+    absences_sd = sd(absences.x),
+    
+    G3_mean = mean(G3.x),
+    G3_median = median(G3.x),
+    G3_sd = sd(G3.x)
+  )
+grouped_summary
+```
+
+Find measure of center and spread across 2 grouping variables for three variables.
+```{r}
+grouped_summary2 <- combined_data %>%
+  group_by(famsize, school) %>%
+  summarize(
+    age_mean = mean(age),
+    age_median = median(age),
+    age_sd = sd(age),
+    # 
+    absences_mean = mean(absences.x),
+    absences_median = median(absences.x),
+    absences_sd = sd(absences.x),
+    
+    G3_mean = mean(G3.x),
+    G3_median = median(G3.x),
+    G3_sd = sd(G3.x)
+  )
+grouped_summary2
+```
+
+Create a correlation matrix.
+```{r}
+# remove the non-numerical data
+numeric_data <- combined_data %>%
+  select(where(is.numeric))
+
+corr_matrix <- cor(numeric_data, use = "complete.obs")
+corr_matrix <- round(corr_matrix, 3)
+corr_matrix
+```
+
+Create diagrams.
+```{r}
+# histogram plot for G3 across school
+histogram_plot <- ggplot(combined_data, aes(x = G3.x, fill = school)) +
+  geom_histogram(position = "identity",  , bins = 30) +
+  labs(title = "Histogram of G3 Scores by School",
+       x = "G3 Score",
+       y = "Count",
+       fill = "School") 
+print(histogram_plot)
+```
+
+```{r}
+# Kernel density plot for 'G3' across 'school'
+density_plot <- ggplot(combined_data, aes(x = G3.x, fill = school)) +
+  geom_density(alpha = 0.6) +
+  labs(title = "Kernel Density Plot of G3 Scores by School",
+       x = "G3 Score",
+       y = "Density",
+       fill = "School") 
+print(density_plot)
+```
+
+```{r}
+# Boxplot for 'absences' across 'school'
+boxplot_plot <- ggplot(combined_data, aes(x = school, y = absences.x, fill = school)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "Boxplot of Absences by School",
+       x = "School",
+       y = "Number of Absences",
+       fill = "School") 
+boxplot_plot
+```
+
+```{r}
+# Scatterplot of G3 vs. absences
+scatterplot1 <- ggplot(combined_data, aes(x = absences.x, y = G3.x, color = school)) +
+  geom_jitter(width = 0.3, height = 0.3, ) +
+  labs(title = "Scatterplot of G3 vs. Absences Colored by School",
+       x = "Number of Absences",
+       y = "G3 Score",
+       color = "School")
+print(scatterplot1)
+
+```
+
+```{r}
+
+# Scatterplot of G3 vs. age, colored by famsize
+scatterplot2 <- ggplot(combined_data, aes(x = age, y = G3.x, color = famsize)) +
+  geom_jitter(width = 0.2, height = 0.3, ) +
+  labs(title = "Scatterplot of G3 vs. Age Colored by Family Size",
+       x = "Age",
+       y = "G3 Score",
+       color = "Family Size")
+print(scatterplot2)
+```
+
+Repeat the scatter plot step but use faceting to obtain graphs
+```{r}
+# Scatterplot of G3 vs. absences, faceted by school
+scatterplot_facet1 <- ggplot(combined_data, aes(x = absences.x, y = G3.x)) +
+  geom_jitter(width = 0.3, height = 0.3, alpha = 0.7, color = "blue") +
+  facet_wrap(~ school) +
+  labs(title = "Scatterplot of G3 vs. Absences Faceted by School",
+       x = "Number of Absences",
+       y = "G3 Score")
+print(scatterplot_facet1)
+```
+
+```{r}
+# Scatterplot of G3 vs. age, faceted by famsize
+scatterplot_facet2 <- ggplot(combined_data, aes(x = age, y = G3.x)) +
+  geom_jitter(width = 0.2, height = 0.3, alpha = 0.7, color = "red") +
+  facet_wrap(~ famsize) +
+  labs(title = "Scatterplot of G3 vs. Age Faceted by Family Size",
+       x = "Age",
+       y = "G3 Score") +
+  theme_minimal()
+print(scatterplot_facet2)
+```
+
+Repeat the scatter plot step but use faceting to obtain graphs at combination of 2 categorical variables
+```{r}
+# Scatterplot of G3 vs. absences, faceted by school and famsize
+scatterplot_facet1 <- ggplot(combined_data, aes(x = absences.x, y = G3.x)) +
+  geom_jitter(width = 0.3, height = 0.3, alpha = 0.7, color = "blue") +
+  facet_grid(famsize ~ school) +
+  labs(title = "Scatterplot of G3 vs. Absences Faceted by School and Family Size",
+       x = "Number of Absences",
+       y = "G3 Score") 
+print(scatterplot_facet1)
+```
+
+```{r}
+# Scatterplot of G3 vs. age, faceted by school and famsize
+scatterplot_facet2 <- ggplot(combined_data, aes(x = age, y = G3.x)) +
+  geom_jitter(width = 0.2, height = 0.3, alpha = 0.7, color = "red") +
+  facet_grid(famsize ~ school) +
+  labs(title = "Scatterplot of G3 vs. Age Faceted by School and Family Size",
+       x = "Age",
+       y = "G3 Score") 
+print(scatterplot_facet2)
+```
+
+The above graphs show different patterns of absences, G3 among the two schools. There's also some combined influence of 'school' and 'family size' on the students' performance (grades)
